@@ -33,9 +33,9 @@ createLabel ::
   -> Github.Name Github.Repo
   -> L.Label
   -> IO Github.IssueLabel
-createLabel auth owner repo L.Label {labelName, labelColor} =
+createLabel auth owner repo L.Label {name, color} =
   handleR =<<
-  Github.createLabel auth owner repo (Github.N labelName) (T.unpack labelColor)
+  Github.createLabel auth owner repo (Github.N name) (T.unpack color)
 
 updateLabel ::
      Github.Auth

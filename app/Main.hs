@@ -74,8 +74,8 @@ class SomeLabel lbl where
   toLabelName :: lbl -> String
 
 instance SomeLabel L.Label where
-  toLabelColor = T.unpack . L.labelColor
-  toLabelName = T.unpack . L.labelName
+  toLabelColor = T.unpack . L.color
+  toLabelName = T.unpack . L.name
 
 instance SomeLabel Github.IssueLabel where
   toLabelColor = T.unpack . Github.labelColor

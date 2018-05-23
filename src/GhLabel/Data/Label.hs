@@ -19,8 +19,8 @@ import qualified GitHub.Data.Name        as Github
 import qualified GitHub.Data.URL         as Github
 
 data Label = Label
-  { labelName  :: Text
-  , labelColor :: Text
+  { name  :: Text
+  , color :: Text
   } deriving (Show, Eq, Generic)
 
 instance FromJSON Label where
@@ -28,8 +28,8 @@ instance FromJSON Label where
   parseJSON _              = fail "Expected Object for Label value"
 
 instance ToJSON Label where
-  toJSON Label {labelName, labelColor} =
-    object ["name" .= labelName, "color" .= labelColor]
+  toJSON Label {name, color} =
+    object ["name" .= name, "color" .= color]
 
 decodeLabelFile :: FilePath -> IO [Label]
 decodeLabelFile f = do
@@ -41,34 +41,33 @@ decodeLabelFile f = do
 toIssueLabel :: Label -> Github.IssueLabel
 toIssueLabel x =
   Github.IssueLabel
-  { Github.labelColor = labelColor x
-  , Github.labelName = Github.N $ labelName x
+  { Github.labelColor = color x
+  , Github.labelName = Github.N $ name x
   , Github.labelUrl = Github.URL ""
   }
 
 labelNameEq :: Label -> Github.IssueLabel -> Bool
-labelNameEq x y = labelName x == Github.untagName (Github.labelName y)
+labelNameEq x y = name x == Github.untagName (Github.labelName y)
 
-ghLabelExistsIn :: [Github.IssueLabel] -> Label -> Maybe Label
-ghLabelExistsIn xs y =
+noGhLabelExistsIn :: [Github.IssueLabel] -> Label -> Maybe Label
+noGhLabelExistsIn xs y =
   maybe (Just y) (const Nothing) (L.find (labelNameEq y) xs)
 
 newLabels :: [Github.IssueLabel] -> [Label] -> [Label]
-newLabels = M.mapMaybe . ghLabelExistsIn
+newLabels = M.mapMaybe . noGhLabelExistsIn
 
 ghLabelNameEq :: Github.IssueLabel -> Github.IssueLabel -> Bool
 ghLabelNameEq x y =
   Github.untagName (Github.labelName x) == Github.untagName (Github.labelName y)
 
 hasChanged :: Github.IssueLabel -> Label -> Bool
-hasChanged x y = labelNameEq y x && Github.labelColor x /= labelColor y
+hasChanged x y = labelNameEq y x && Github.labelColor x /= color y
 
-updateIssueLabel :: Github.IssueLabel -> Label -> Maybe Github.IssueLabel
-updateIssueLabel x y = Just $ x {Github.labelColor = labelColor y}
+updateIssueLabel :: Github.IssueLabel -> Label -> Github.IssueLabel
+updateIssueLabel x y = x {Github.labelColor = color y}
 
 updatedLabel :: [Label] -> Github.IssueLabel -> Maybe Github.IssueLabel
-updatedLabel ls x =
-  maybe Nothing (updateIssueLabel x) (L.find (hasChanged x) ls)
+updatedLabel ls x = fmap (updateIssueLabel x) (L.find (hasChanged x) ls)
 
 updatedLabels :: [Github.IssueLabel] -> [Label] -> [Github.IssueLabel]
 updatedLabels = flip (M.mapMaybe . updatedLabel)
