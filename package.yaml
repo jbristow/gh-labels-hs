@@ -1,36 +1,30 @@
 name:                gh-labels-hs
 version:             0.1.0.0
-github:              "githubuser/gh-labels-hs"
+github:              "jbristow/gh-labels-hs"
 license:             BSD3
-author:              "Author name here"
-maintainer:          "example@example.com"
-copyright:           "2018 Author name here"
+author:              "Jon Bristow"
+maintainer:          "jonthegm@yahoo.com"
+copyright:           "2018 Jon Bristow"
 
 extra-source-files:
 - README.md
 - ChangeLog.md
 
-# Metadata used when publishing your package
-# synopsis:            Short description of your package
-# category:            Web
-
-# To avoid duplicated efforts in documentation and dealing with the
-# complications of embedding Haddock markup inside cabal files, it is
-# common to point users to the README.md file.
-description:         Please see the README on GitHub at <https://github.com/githubuser/gh-labels-hs#readme>
+description:         Please see the README on GitHub at <https://github.com/jbristow/gh-labels-hs#readme>
 
 dependencies:
 - base >= 4.10.1.0 && < 5
-- cmdargs
-- yaml
-- bytestring
 - text
-- aeson
 - github
-- vector
+- cmdargs
 
 library:
   source-dirs: src
+  dependencies:
+  - yaml
+  - bytestring
+  - aeson
+  - vector
 
 executables:
   gh-labels-hs:
@@ -53,3 +47,7 @@ tests:
     - -with-rtsopts=-N -Wall
     dependencies:
     - gh-labels-hs
+    - yaml
+    - aeson
+    - text
+    - hspec
