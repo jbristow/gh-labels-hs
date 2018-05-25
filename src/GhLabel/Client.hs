@@ -1,10 +1,10 @@
-{-# LANGUAGE NamedFieldPuns    #-}
-{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE NamedFieldPuns  #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module GhLabel.Client where
 
 import           Control.Exception
-import           Control.Monad
+import qualified Data.Either                    as E
 import           Data.List                      as L
 import           Data.Text                      (Text)
 import qualified Data.Text                      as T
@@ -23,18 +23,17 @@ listGhLabels ::
      Github.Auth
   -> Github.Name Github.Owner
   -> Github.Name Github.Repo
-  -> IO [Github.IssueLabel]
+  -> IO (Either Github.Error [Github.IssueLabel])
 listGhLabels auth owner repo =
-  either throwIO (return . V.toList) =<< Github.labelsOnRepo' (Just auth) owner repo
+  fmap (fmap V.toList) (Github.labelsOnRepo' (Just auth) owner repo)
 
 createLabel ::
      Github.Auth
   -> Github.Name Github.Owner
   -> Github.Name Github.Repo
   -> L.Label
-  -> IO Github.IssueLabel
+  -> IO (Either Github.Error Github.IssueLabel)
 createLabel auth owner repo L.Label {name, color} =
-  handleR =<<
   Github.createLabel auth owner repo (Github.N name) (T.unpack color)
 
 updateLabel ::
@@ -42,19 +41,18 @@ updateLabel ::
   -> Github.Name Github.Owner
   -> Github.Name Github.Repo
   -> Github.IssueLabel
-  -> IO Github.IssueLabel
+  -> IO (Either Github.Error Github.IssueLabel)
 updateLabel auth owner repo Github.IssueLabel { labelName = lname
                                               , labelColor = lcolor
                                               , ..
                                               } =
-  handleR =<< Github.updateLabel auth owner repo lname lname (T.unpack lcolor)
-
+  Github.updateLabel auth owner repo lname lname (T.unpack lcolor)
 
 deleteLabel ::
      Github.Auth
   -> Github.Name Github.Owner
   -> Github.Name Github.Repo
   -> Github.IssueLabel
-  -> IO Text
+  -> IO (Either Github.Error ())
 deleteLabel auth owner repo Github.IssueLabel {labelName = lname, ..} =
-  either throwIO (const (return (Github.untagName lname))) =<< Github.deleteLabel auth owner repo lname
+  Github.deleteLabel auth owner repo lname

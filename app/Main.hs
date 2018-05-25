@@ -13,9 +13,11 @@ import qualified Data.Text              as T
 import qualified Data.Text.Encoding     as TE
 import           GhLabel.Client
 import qualified GhLabel.Data.Label     as L
+import qualified GhLabel.Data.SomeLabel as SL
 import           GitHub.Data            as Github
 import           GitHub.Data.Name       as Github
 import           System.Console.CmdArgs
+import           Text.Printf            (printf)
 
 {-# ANN Options ("HLint: ignore Use camelCase" :: String) #-}
 
@@ -69,79 +71,59 @@ toAuth opts =
     (endpoint opts)
     (TE.encodeUtf8 (M.fromJust (token opts)))
 
-class SomeLabel lbl where
-  toLabelColor :: lbl -> String
-  toLabelName :: lbl -> String
-
-instance SomeLabel L.Label where
-  toLabelColor = T.unpack . L.color
-  toLabelName = T.unpack . L.name
-
-instance SomeLabel Github.IssueLabel where
-  toLabelColor = T.unpack . Github.labelColor
-  toLabelName = T.unpack . Github.untagName . Github.labelName
-
 maybeDo ::
-     SomeLabel a
+     (SL.HasLabelName a, SL.IsSomeLabel a, SL.IsSomeLabel b, Exception e)
   => Options
   -> a
-  -> (a -> IO b)
-  -> (a -> String)
-  -> (b -> String)
+  -> String
+  -> (Github.Auth -> Github.Name Github.Owner -> Github.Name Github.Repo -> a -> IO (Either e b))
   -> IO String
-maybeDo Options {dry_run = True, ..} label _ dryRunF _ = return (dryRunF label)
-maybeDo _ label actionF _ logLineF = do
-  result <- actionF label
-  return (logLineF result)
-
-defaultDryRunF :: SomeLabel a => String -> a -> String
-defaultDryRunF = (("DRY-RUN " ++) .) . defaultLogLineF
-
-defaultLogLineF :: SomeLabel a => String -> a -> String
-defaultLogLineF prefix lbl =
-  prefix ++ " " ++ toLabelName lbl ++ ":" ++ toLabelColor lbl
+maybeDo Options {dry_run = True, ..} label prefix _ =
+  return
+    (printf "DRY-RUN %s %s" prefix (SL.showLabel (SL.toSomeLabel label) ""))
+maybeDo opts label prefix actionF = do
+  eitherResult <- actionF (toAuth opts) (ownerN opts) (repoN opts) label
+  return $
+    case eitherResult of
+      Left e ->
+        printf
+          "ERROR: %s %s: %s"
+          prefix
+          (SL.showLabel (SL.toSomeLabel label) "")
+          (show e)
+      Right result ->
+        printf
+          "%s %s"
+          prefix
+          (SL.showLabel (SL.toSomeLabel result) (SL.toNameString label))
 
 maybeCreateLabel :: Options -> L.Label -> IO String
-maybeCreateLabel opts label =
-  maybeDo
-    opts
-    label
-    (createLabel (toAuth opts) (ownerN opts) (repoN opts))
-    (defaultDryRunF "CREATE")
-    (defaultLogLineF "CREATE")
+maybeCreateLabel opts label = maybeDo opts label "CREATE" createLabel
 
 maybeUpdateLabel :: Options -> Github.IssueLabel -> IO String
-maybeUpdateLabel opts label =
-  maybeDo
-    opts
-    label
-    (updateLabel (toAuth opts) (ownerN opts) (repoN opts))
-    (defaultDryRunF "UPDATE")
-    (defaultLogLineF "UPDATE")
+maybeUpdateLabel opts label = maybeDo opts label "UPDATE" updateLabel
 
 maybeDeleteLabel :: Options -> Github.IssueLabel -> IO String
-maybeDeleteLabel opts label =
-  maybeDo
-    opts
-    label
-    (deleteLabel (toAuth opts) (ownerN opts) (repoN opts))
-    (("DRY-RUN DELETE " ++) . toLabelName)
-    (("DELETE " ++) . T.unpack)
-
-toLogLine :: IO [String] -> IO ()
-toLogLine = (putStr =<<) . fmap unlines
+maybeDeleteLabel opts label = maybeDo opts label "DELETE" deleteLabel
 
 -- our main function
 main :: IO ()
 main = do
   opts <- validateOpts =<< cmdArgs options
   labels <- L.decodeLabelFile (T.unpack (file opts))
-  existingLabels <- listGhLabels (toAuth opts) (ownerN opts) (repoN opts)
-  toLogLine (mapM (maybeCreateLabel opts) (L.newLabels existingLabels labels))
-  toLogLine
-    (mapM (maybeUpdateLabel opts) (L.updatedLabels existingLabels labels))
-  toLogLine
-    (mapM (maybeDeleteLabel opts) (L.deletedLabels existingLabels labels))
+  eitherExistingLabels <- listGhLabels (toAuth opts) (ownerN opts) (repoN opts)
+  case eitherExistingLabels of
+    Left err -> throwIO err
+    Right existingLabels -> do
+      mapM_
+        (fmap putStrLn . maybeCreateLabel opts)
+        (L.newLabels existingLabels labels)
+      mapM_
+        (fmap putStrLn . maybeUpdateLabel opts)
+        (L.updatedLabels existingLabels labels)
+      mapM_
+        (fmap putStrLn . maybeDeleteLabel opts)
+        (L.deletedLabels existingLabels labels)
 
 validateOpts :: Options -> IO Options
 validateOpts Options {token = Nothing, ..} = throwIO $ MissingOption "token"
